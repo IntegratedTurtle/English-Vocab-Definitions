@@ -1,6 +1,8 @@
 import csv
 import re
+import requests
 import shutil
+import time
 
 from nltk.corpus import wordnet
 from PyDictionary import PyDictionary
@@ -68,7 +70,7 @@ def defwriter(csvfile="", makecopy=True):
     Args:
     - csvfile (str): The path to the CSV file containing the vocabulary words and definitions
     - makecopy (bool): Whether to create a copy of the original file before making changes, defaults to True
-
+response = requests.get(url+vocabulary[1], headers={"User-Agent":"Mozilla/5.0"})
     Returns:
     - None
     """
@@ -77,6 +79,7 @@ def defwriter(csvfile="", makecopy=True):
     if makecopy:
         shutil.copyfile(csvfile, csvfile[:-4] + '_copy.csv')
 
+    """
     # initialize PyDictionary
     Pydictionary = PyDictionary()
 
@@ -119,6 +122,59 @@ def defwriter(csvfile="", makecopy=True):
 
         for vocabulary in vocabs:
             csv_writer.writerow(vocabulary)
+    """
+    # read the content of the file
+    vocabs = []
+    url = "https://www.oxfordlearnersdictionaries.com/definition/english/"
+    with open(csvfile, "r") as file:
+        csv_reader = csv.reader(file)
+
+        # append each row to the vocabs list
+        for row in csv_reader:
+            vocabs.append(row)
+
+        # get the definition of the vocabulary in the second column
+        for i, vocabulary in enumerate(vocabs):
+            print(f"\nRow{i}: {vocabulary} ")
+            # skip empty vocabulary words
+            if vocabulary[1] == "":
+                continue
+            else:
+                response = requests.get(url+vocabulary[1].replace(" ", "-"), headers={"User-Agent":"Mozilla/5.0"})
+                time.sleep(1)
+                site = response.content
+
+                pattern1 = r'<span class="def" hclass="def" htag="span">(.+?)</span>'
+                pattern2 = r'<span class="def" htag="span" hclass="def">(.+?)</span>'
+
+                match = re.search(pattern1, site.decode('utf-8'))
+                if match == None:
+                    match = re.search(pattern2, site.decode('utf-8'))
+
+                if match != None:
+                    definition = match.group(1)
+                    definition = re.sub(r'<.*?>', '', definition) # exclude everything between < and > signs
+                    vocabulary[2] = definition
+                    print(f"Vocabulary: {vocabulary[1]}\nDefinition: {definition}")
+                else:
+                    print(f"No Match for: {vocabulary[1]}")
+                    vocabulary[2] = ""
+
+            # write changes to file every ten rows
+            if (i+1) % 10 == 0:
+                with open(csvfile, "w") as file:
+                    csv_writer = csv.writer(file)
+                    for row in vocabs:
+                        csv_writer.writerow(row)
+
+    # write changes to file
+    with open(csvfile, "w") as file:
+        csv_writer = csv.writer(file)
+
+        for vocabulary in vocabs:
+            csv_writer.writerow(vocabulary)
+
+
 
 def csvcleaner(csvfile="", makecopy=True):
     """
